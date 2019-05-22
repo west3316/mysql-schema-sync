@@ -4,19 +4,22 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+
+	"github.com/BurntSushi/toml"
 )
 
 // Config  config struct
 type Config struct {
-	SourceDSN    string                       `json:"source"`
-	DestDSN      string                       `json:"dest"`
-	AlterIgnore  map[string]*AlterIgnoreTable `json:"alter_ignore"`
-	Tables       []string                     `json:"tables"`
-	TablesIGNORE []string                     `json:"tables_ignore"`
-	Email        *EmailStruct                 `json:"email"`
-	ConfigPath   string
-	Sync         bool
-	Drop         bool
+	SourceDSN     string                       `toml:"source"`
+	DestDSN       string                       `toml:"dest"`
+	AlterIgnore   map[string]*AlterIgnoreTable `toml:"alter_ignore"`
+	Tables        []string                     `toml:"tables"`
+	TablesIGNORE  []string                     `toml:"tables_ignore"`
+	OverwriteData overwriteData                `toml:"overwrite_data"`
+	Email         *EmailStruct                 `toml:"email"`
+	ConfigPath    string
+	Sync          bool
+	Drop          bool
 }
 
 func (cfg *Config) String() string {
@@ -26,9 +29,14 @@ func (cfg *Config) String() string {
 
 // AlterIgnoreTable table's ignore info
 type AlterIgnoreTable struct {
-	Column     []string `json:"column"`
-	Index      []string `json:"index"`
-	ForeignKey []string `json:"foreign"` //外键
+	Column     []string `toml:"column"`
+	Index      []string `toml:"index"`
+	ForeignKey []string `toml:"foreign"` //外键
+}
+
+// overwriteData overwrite tables data
+type overwriteData struct {
+	Tables []string `toml:"tables"`
 }
 
 // IsIgnoreField isIgnore
@@ -79,7 +87,7 @@ func (cfg *Config) Check() {
 	if cfg.DestDSN == "" {
 		log.Fatal("dest dns is empty")
 	}
-	//	log.Println("config:\n", cfg)
+	log.Println("config:\n", cfg)
 }
 
 // IsIgnoreIndex is index ignore
@@ -130,7 +138,7 @@ func (cfg *Config) SendMailFail(errStr string) {
 // LoadConfig load config file
 func LoadConfig(confPath string) *Config {
 	var cfg *Config
-	err := loadJSONFile(confPath, &cfg)
+	_, err := toml.DecodeFile(confPath, &cfg)
 	if err != nil {
 		log.Fatalln("load json conf:", confPath, "failed:", err)
 	}

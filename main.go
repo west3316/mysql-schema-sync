@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hidu/mysql-schema-sync/internal"
+	"github.com/west3316/mysql-schema-sync/internal"
 )
 
-var configPath = flag.String("conf", "./config.json", "json config file path")
+var configPath = flag.String("conf", "./config.toml", "toml config file path")
 var sync = flag.Bool("sync", false, "sync shcema change to dest db")
 var drop = flag.Bool("drop", false, "drop fields,index,foreign key")
 
@@ -73,6 +73,10 @@ func main() {
 			}
 		}
 	}
+	if cfg.OverwriteData.Tables == nil {
+		cfg.OverwriteData.Tables = []string{}
+	}
+
 	defer (func() {
 		if err := recover(); err != nil {
 			log.Println(err)
@@ -83,4 +87,5 @@ func main() {
 
 	cfg.Check()
 	internal.CheckSchemaDiff(cfg)
+	internal.OverwriteData(cfg)
 }
