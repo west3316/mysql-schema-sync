@@ -10,28 +10,29 @@ import (
 	"text/template"
 )
 
-const tmpl = `INSERT INTO {{ .Name }} VALUES {{ .Values }}`
+const tmpl = `INSERT INTO {{ .Name }}({{ .Fields }}) VALUES {{ .Values }}`
 
 type table struct {
 	Name   string
+	Fields string
 	Values string
 }
 
-func createTableValues(db *sql.DB, name string) (string, error) {
+func createTableValues(db *sql.DB, name string) (string, string, error) {
 	// Get Data
 	rows, err := db.Query("SELECT * FROM " + name)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer rows.Close()
 
 	// Get columns
 	columns, err := rows.Columns()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(columns) == 0 {
-		return "", errors.New("No columns in table " + name + ".")
+		return "", "", errors.New("No columns in table " + name + ".")
 	}
 
 	// Read data
@@ -45,7 +46,7 @@ func createTableValues(db *sql.DB, name string) (string, error) {
 
 		// Read data
 		if err := rows.Scan(ptrs...); err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		dataStrings := make([]string, len(columns))
@@ -61,7 +62,7 @@ func createTableValues(db *sql.DB, name string) (string, error) {
 		dataText = append(dataText, "("+strings.Join(dataStrings, ",")+")")
 	}
 
-	return strings.Join(dataText, ","), rows.Err()
+	return "`" + strings.Join(columns, "`,`") + "`", strings.Join(dataText, ","), rows.Err()
 }
 
 var (
@@ -79,14 +80,19 @@ func OverwriteData(cfg *Config) {
 
 	buffer := bytes.NewBuffer(dumpBuffer)
 	for _, tbl := range cfg.OverwriteData.Tables {
-		sqlText, err := createTableValues(sc.SourceDb.Db, tbl)
+		fields, values, err := createTableValues(sc.SourceDb.Db, tbl)
 		if err != nil {
 			log.Printf("-- create table value error: %v \n", err)
 			continue
 		}
 
+		_, err = sc.DestDb.Db.Exec("truncate table " + tbl)
+		if err != nil {
+			log.Fatalf("truncate table: %s, err: %v", tbl, err)
+		}
+
 		log.Println("-- overwrite table: " + tbl)
-		err = t.Execute(buffer, &table{Name: tbl, Values: sqlText})
+		err = t.Execute(buffer, &table{Name: tbl, Fields: fields, Values: values})
 		if err != nil {
 			log.Fatalf("overwrite table: %s, err: %v", tbl, err)
 		}
@@ -94,6 +100,7 @@ func OverwriteData(cfg *Config) {
 		data, _ := ioutil.ReadAll(buffer)
 		result, err := sc.DestDb.Db.Exec(string(data))
 		if err != nil {
+			log.Println("sql:" + string(data))
 			log.Fatalf("exec table: %s, err: %v", tbl, err)
 		}
 
